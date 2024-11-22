@@ -7,23 +7,45 @@ const nodemailer = require("nodemailer");
 const JWT_SECRET = "your_jwt_secret_key";
 
 // Customer Registration
+const Validator = require("validatorjs");
+
 exports.register = async (req, res) => {
   try {
-    //Get the registration data both admin and customer
+    // Get the registration data both admin and customer
     const reqData = {
       firstName: req.body.firstName,
       lastName: req.body.lastName,
       email: req.body.email,
       password: req.body.password,
-      role: req.body.role ? req.body.role : "customer", // Here use ternary for differenciate the role
+      role: req.body.role ? req.body.role : "customer",
     };
 
-    //Find the user in the database
+    // Define validation rules
+    const rules = {
+      firstName: "required|string",
+      lastName: "required|string",
+      email: "required|email",
+      password: "required|string|min:6",
+      role: "in:customer,admin", // Allow only 'customer' or 'admin' roles
+    };
+
+    // Create a Validator instance
+    const validation = new Validator(reqData, rules);
+
+    // Check if validation fails
+    if (validation.fails()) {
+      return res.status(400).json({
+        status: 400,
+        data: {},
+        error: validation.errors.all(),
+      });
+    }
+
+    // Find if the user already exists in the database
     const findUserOrAdmin = await User.findOne({
       where: { email: reqData.email },
     });
 
-    // If same user exist so can not the forward
     if (findUserOrAdmin) {
       return res.status(400).json({
         status: 400,
@@ -32,10 +54,10 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Get the user details from the database
+    // Create the new user
     const user = await User.create(reqData);
 
-    // Generate verification token usig jwt
+    // Generate verification token using JWT
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
       expiresIn: "1h",
     });
@@ -57,6 +79,7 @@ exports.register = async (req, res) => {
     });
   }
 };
+
 
 // Email verification
 exports.verifyEmail = async (req, res) => {
